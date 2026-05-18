@@ -5,7 +5,8 @@ const formatOptions = [
   { value: 'png', label: 'PNG' },
   { value: 'jpg', label: 'JPG' },
   { value: 'jpeg', label: 'JPEG' },
-  { value: 'webp', label: 'WebP' }
+  { value: 'webp', label: 'WebP' },
+  { value: 'avif', label: 'AVIF' }
 ];
 
 const ImageFormats: React.FC = () => {

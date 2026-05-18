@@ -11,7 +11,8 @@ const formatFileSize = (bytes: number): string => {
 
 const CompressionResults: React.FC = () => {
   const { compressionResults } = useCompressionStore();
-  const successfulResults = compressionResults.filter((result) => result.success);
+  const successfulResults = compressionResults.filter((result) => result.success && !result.skipped);
+  const skippedResults = compressionResults.filter((result) => result.skipped);
   const failedResults = compressionResults.filter((result) => !result.success);
 
   return (
@@ -23,6 +24,7 @@ const CompressionResults: React.FC = () => {
         </div>
         <div className="result-summary">
           <span className="status-badge success">{successfulResults.length} 成功</span>
+          <span className="status-badge warning">{skippedResults.length} 跳过</span>
           <span className="status-badge danger">{failedResults.length} 失败</span>
         </div>
       </div>
@@ -32,19 +34,27 @@ const CompressionResults: React.FC = () => {
       ) : (
         <div className="result-list">
           {compressionResults.map((result, index) => (
-            <div className={`result-row ${result.success ? 'is-success' : 'is-error'}`} key={index}>
+            <div
+              className={`result-row ${result.success ? 'is-success' : 'is-error'} ${
+                result.skipped ? 'is-skipped' : ''
+              }`}
+              key={index}
+            >
               <div className="result-title-row">
                 <strong>{result.name}</strong>
-                <span>{result.success ? '成功' : '失败'}</span>
+                <span>{result.skipped ? '跳过' : result.success ? '成功' : '失败'}</span>
               </div>
               <div className="result-path">{result.path}</div>
 
               {result.success ? (
-                <div className="result-metrics">
-                  <span>原始 {formatFileSize(result.originalSize)}</span>
-                  <span>压缩后 {formatFileSize(result.compressedSize)}</span>
-                  <span>节省 {result.compressionRatio}%</span>
-                </div>
+                <>
+                  <div className="result-metrics">
+                    <span>原始 {formatFileSize(result.originalSize)}</span>
+                    <span>输出 {formatFileSize(result.compressedSize)}</span>
+                    <span>节省 {result.compressionRatio}%</span>
+                  </div>
+                  {result.message && <div className="result-note">{result.message}</div>}
+                </>
               ) : (
                 <div className="error-message">错误: {result.error || '未知错误'}</div>
               )}

@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+export type CompressionMode = 'lossless' | 'low-loss' | 'balanced' | 'aggressive';
+
 const normalizeBaseUrl = (baseUrl: string) => baseUrl.replace(/\/+$/, '');
 
 const getApiBaseCandidates = () => {
@@ -97,6 +99,8 @@ export interface CompressionResult {
   compressedSize: number;
   compressionRatio: string;
   success: boolean;
+  skipped?: boolean;
+  message?: string;
   error?: string;
 }
 
@@ -110,6 +114,9 @@ export interface Config {
   height?: number;
   maintainAspectRatio: boolean;
   quality: number;
+  compressionMode: CompressionMode;
+  avoidLargerOutput: boolean;
+  preserveMetadata: boolean;
   overwriteOriginal?: boolean;
 }
 
@@ -135,16 +142,21 @@ interface CompressionState {
   setIsScanning: (scanning: boolean) => void;
 }
 
+const defaultConfig: Config = {
+  imageFormats: ['png', 'jpg', 'jpeg', 'webp', 'avif'],
+  outputFormat: 'original',
+  maintainAspectRatio: true,
+  quality: 80,
+  compressionMode: 'balanced',
+  avoidLargerOutput: true,
+  preserveMetadata: false,
+  overwriteOriginal: false
+};
+
 export const useCompressionStore = create<CompressionState>()(
   persist(
     (set, get) => ({
-      config: {
-        imageFormats: ['png', 'jpg', 'jpeg', 'webp'],
-        outputFormat: 'original',
-        maintainAspectRatio: true,
-        quality: 80,
-        overwriteOriginal: false
-      },
+      config: defaultConfig,
       selectedFolder: '',
       images: [],
       compressionResults: [],
@@ -294,7 +306,7 @@ export const useCompressionStore = create<CompressionState>()(
         }
 
         setIsProcessing(true);
-        addLog('开始压缩...');
+        addLog(`开始压缩，模式: ${config.compressionMode}`);
 
         try {
           const { json, baseUrl } = await requestApiJson('/api/compress', {
@@ -308,7 +320,10 @@ export const useCompressionStore = create<CompressionState>()(
               maintainAspectRatio: config.maintainAspectRatio,
               outputDir: config.outputFolder || undefined,
               overwriteOriginal: config.overwriteOriginal === true,
-              quality: config.quality
+              quality: config.quality,
+              compressionMode: config.compressionMode,
+              avoidLargerOutput: config.avoidLargerOutput,
+              preserveMetadata: config.preserveMetadata
             })
           });
 
@@ -329,15 +344,20 @@ export const useCompressionStore = create<CompressionState>()(
               compressedSize: result.compressedSize || 0,
               compressionRatio: result.compressionRatio || '0',
               success: result.success !== false,
+              skipped: result.skipped === true,
+              message: result.message,
               error: result.error
             }));
 
             setCompressionResults(results);
-            const successful = results.filter((result) => result.success).length;
-            addLog(`压缩完成，成功 ${successful}/${images.length} 个`);
+            const successful = results.filter((result) => result.success && !result.skipped).length;
+            const skipped = results.filter((result) => result.skipped).length;
+            addLog(`压缩完成，成功 ${successful}/${images.length} 个，跳过 ${skipped} 个`);
 
             results.forEach((result) => {
-              if (result.success) {
+              if (result.skipped) {
+                addLog(`跳过: ${result.name} - ${result.message || '已保留原图'}`);
+              } else if (result.success) {
                 addLog(`成功: ${result.name} - 节省 ${result.compressionRatio}%`);
               } else {
                 addLog(`失败: ${result.name} - ${result.error || '未知错误'}`);
@@ -368,7 +388,19 @@ export const useCompressionStore = create<CompressionState>()(
       partialize: (state) => ({
         config: state.config,
         selectedFolder: state.selectedFolder
-      })
+      }),
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<CompressionState> | undefined;
+        return {
+          ...currentState,
+          ...persisted,
+          config: {
+            ...defaultConfig,
+            ...persisted?.config,
+            imageFormats: persisted?.config?.imageFormats || defaultConfig.imageFormats
+          }
+        };
+      }
     }
   )
 );

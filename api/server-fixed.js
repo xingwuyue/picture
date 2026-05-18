@@ -4,20 +4,27 @@ import fs from 'fs-extra';
 import path from 'path';
 import sharp from 'sharp';
 import { fileURLToPath } from 'url';
+import {
+  buildEncoderOptions,
+  getTargetFormat,
+  normalizeFormat,
+  shouldCopyForLosslessJpeg,
+  shouldKeepOriginalOutput
+} from './compression-options.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 3006;
-const SUPPORTED_FORMATS = ['png', 'jpg', 'jpeg', 'webp'];
+const SUPPORTED_FORMATS = ['png', 'jpg', 'jpeg', 'webp', 'avif'];
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
 const toSafeQuality = (quality) =>
-  Number.isFinite(quality) ? Math.min(Math.max(Math.round(quality), 1), 100) : 88;
+  Number.isFinite(quality) ? Math.min(Math.max(Math.round(quality), 1), 100) : 80;
 
 const getErrorMessage = (error) => (error instanceof Error ? error.message : String(error));
 
@@ -41,6 +48,23 @@ const normalizeImageError = (error) => {
   }
 
   return message || '未知错误';
+};
+
+const getTargetExtension = (format) => `.${format === 'jpeg' ? 'jpg' : format}`;
+
+const applyOutputFormat = (image, format, options) => {
+  switch (format) {
+    case 'png':
+      return image.png(options);
+    case 'jpeg':
+      return image.jpeg(options);
+    case 'webp':
+      return image.webp(options);
+    case 'avif':
+      return image.avif(options);
+    default:
+      return image.toFormat(format);
+  }
 };
 
 app.post('/api/scan-images', async (req, res) => {
@@ -174,7 +198,10 @@ app.post('/api/compress', async (req, res) => {
       maintainAspectRatio = true,
       outputDir,
       overwriteOriginal = false,
-      quality
+      quality,
+      compressionMode = 'balanced',
+      avoidLargerOutput = true,
+      preserveMetadata = false
     } = req.body;
 
     if (!Array.isArray(images) || images.length === 0) {
@@ -200,17 +227,34 @@ app.post('/api/compress', async (req, res) => {
         await fs.ensureDir(useDir);
 
         const baseName = path.basename(image.path, path.extname(image.path));
-        const sourceExt = path.extname(image.path).replace('.', '').toLowerCase() || 'png';
-        const targetFormat = outputFormat === 'original' ? sourceExt : String(outputFormat).toLowerCase();
-        const normalizedFormat = targetFormat === 'jpg' ? 'jpeg' : targetFormat;
-        const targetExt = `.${normalizedFormat === 'jpeg' ? 'jpg' : normalizedFormat}`;
-        const targetPath = path.join(useDir, `${baseName}${targetExt}`);
+        const sourceExt = normalizeFormat(path.extname(image.path).replace('.', '') || 'png');
+        const targetFormat = getTargetFormat(outputFormat, sourceExt);
+        const targetPath = path.join(useDir, `${baseName}${getTargetExtension(targetFormat)}`);
+        const hasResize = Boolean(width || height);
 
-        const imageSharp = sharp(image.path, { failOn: 'none' });
-        const metadata = await imageSharp.metadata();
+        if (shouldCopyForLosslessJpeg({ sourceExt, targetFormat, mode: compressionMode, hasResize })) {
+          if (!overwriteOriginal || image.path !== targetPath) {
+            await fs.copy(image.path, targetPath, { overwrite: true });
+          }
+
+          results.push({
+            name: image.name,
+            path: overwriteOriginal ? image.path : targetPath,
+            originalSize,
+            compressedSize: originalSize,
+            compressionRatio: '0.00',
+            success: true,
+            skipped: true,
+            message: '无损模式下 JPG 未重编码，已保留原始画质'
+          });
+          continue;
+        }
+
+        let processedImage = sharp(image.path, { failOn: 'none' });
+        const metadata = await processedImage.metadata();
 
         let resizeOptions = {};
-        if (width || height) {
+        if (hasResize) {
           if (maintainAspectRatio) {
             if (width && !height) {
               resizeOptions = { width };
@@ -227,33 +271,34 @@ app.post('/api/compress', async (req, res) => {
           }
         }
 
-        let processedImage = imageSharp;
         if (Object.keys(resizeOptions).length > 0) {
           processedImage = processedImage.resize(resizeOptions);
         }
 
-        let outputBuffer;
-        switch (normalizedFormat) {
-          case 'png':
-            outputBuffer = await processedImage
-              .png({ quality: qualityValue, compressionLevel: 9, palette: true })
-              .toBuffer();
-            break;
-          case 'jpeg':
-            outputBuffer = await processedImage.jpeg({ quality: qualityValue, mozjpeg: true }).toBuffer();
-            break;
-          case 'webp':
-            outputBuffer = await processedImage
-              .webp({ quality: qualityValue, effort: 5, nearLossless: sourceExt === 'png' })
-              .toBuffer();
-            break;
-          default:
-            outputBuffer = await processedImage.toBuffer();
+        if (preserveMetadata) {
+          processedImage = processedImage.withMetadata();
+        }
+
+        const encoderOptions = buildEncoderOptions(targetFormat, compressionMode, qualityValue);
+        const outputBuffer = await applyOutputFormat(processedImage, targetFormat, encoderOptions).toBuffer();
+        const compressedSize = outputBuffer.length;
+
+        if (shouldKeepOriginalOutput({ originalSize, compressedSize, avoidLargerOutput })) {
+          results.push({
+            name: image.name,
+            path: image.path,
+            originalSize,
+            compressedSize: originalSize,
+            compressionRatio: '0.00',
+            success: true,
+            skipped: true,
+            message: `已跳过，生成文件更大 (${compressedSize} bytes)`
+          });
+          continue;
         }
 
         await fs.writeFile(targetPath, outputBuffer);
 
-        const compressedSize = outputBuffer.length;
         const compressionRatio = (
           ((originalSize - compressedSize) / Math.max(originalSize || compressedSize, 1)) *
           100
