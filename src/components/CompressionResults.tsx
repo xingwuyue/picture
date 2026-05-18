@@ -1,83 +1,58 @@
 import React from 'react';
 import { useCompressionStore } from '../stores/compressionStore';
 
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const index = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${Number.parseFloat((bytes / Math.pow(k, index)).toFixed(2))} ${sizes[index]}`;
+};
+
 const CompressionResults: React.FC = () => {
   const { compressionResults } = useCompressionStore();
-  
-  if (compressionResults.length === 0) return null;
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-  };
-
-  const successfulResults = compressionResults.filter(r => r.success);
-  const failedResults = compressionResults.filter(r => !r.success);
+  const successfulResults = compressionResults.filter((result) => result.success);
+  const failedResults = compressionResults.filter((result) => !result.success);
 
   return (
-    <div className="module-section">
-      <div className="results-container">
-        <div className="results-header">
-          <h3 className="results-title">
-            📊 压缩结果
-          </h3>
-          <div className="result-stats">
-            {successfulResults.length > 0 && (
-              <span className="stat-item stat-success">
-                ✅ {successfulResults.length} 成功
-              </span>
-            )}
-            {failedResults.length > 0 && (
-              <span className="stat-item stat-error">
-                ⚠️ {failedResults.length} 失败
-              </span>
-            )}
-          </div>
+    <section className="panel result-panel">
+      <div className="panel-header horizontal">
+        <div>
+          <h2 className="panel-title">压缩结果</h2>
+          <p className="panel-description">完成压缩后将在这里显示结果。</p>
         </div>
-        <div className="results-grid">
+        <div className="result-summary">
+          <span className="status-badge success">{successfulResults.length} 成功</span>
+          <span className="status-badge danger">{failedResults.length} 失败</span>
+        </div>
+      </div>
+
+      {compressionResults.length === 0 ? (
+        <div className="empty-state">暂无压缩结果。</div>
+      ) : (
+        <div className="result-list">
           {compressionResults.map((result, index) => (
-            <div key={index} className={`result-item ${result.success ? 'success' : 'error'}`}>
-              <div className="result-header">
-                <span className="result-icon">{result.success ? '✅' : '⚠️'}</span>
-                <div className="result-main">
-                  <div className="result-title">
-                    {index + 1}. {result.name}
-                  </div>
-                  <div className="result-path">📍 {result.path}</div>
-                </div>
+            <div className={`result-row ${result.success ? 'is-success' : 'is-error'}`} key={index}>
+              <div className="result-title-row">
+                <strong>{result.name}</strong>
+                <span>{result.success ? '成功' : '失败'}</span>
               </div>
-              
+              <div className="result-path">{result.path}</div>
+
               {result.success ? (
-                <div className="compression-result">
-                  <div className="compression-stats">
-                    <div className="compression-stat">
-                      <span>原始:</span>
-                      <strong>{formatFileSize(result.originalSize)}</strong>
-                    </div>
-                    <div className="compression-stat">
-                      <span>压缩后:</span>
-                      <strong>{formatFileSize(result.compressedSize)}</strong>
-                    </div>
-                    <div className="compression-stat">
-                      <span>节省:</span>
-                      <span className="compression-ratio">{result.compressionRatio}%</span>
-                    </div>
-                  </div>
+                <div className="result-metrics">
+                  <span>原始 {formatFileSize(result.originalSize)}</span>
+                  <span>压缩后 {formatFileSize(result.compressedSize)}</span>
+                  <span>节省 {result.compressionRatio}%</span>
                 </div>
               ) : (
-                <div className="error-message">
-                  <span className="error-icon">⚠️</span>
-                  <span><strong>错误:</strong> {result.error}</span>
-                </div>
+                <div className="error-message">错误: {result.error || '未知错误'}</div>
               )}
             </div>
           ))}
         </div>
-      </div>
-    </div>
+      )}
+    </section>
   );
 };
 

@@ -1,43 +1,43 @@
 import React from 'react';
 import { useCompressionStore } from '../stores/compressionStore';
 
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const index = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${Number.parseFloat((bytes / Math.pow(k, index)).toFixed(2))} ${sizes[index]}`;
+};
+
 const ImageList: React.FC = () => {
   const { images } = useCompressionStore();
-  if (images.length === 0) return null;
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-  };
 
   return (
-    <div className="module-section">
-      <div className="file-list-container">
-        <div className="file-list-header">
-          <h3 className="file-list-title">
-            📷 扫描结果
-          </h3>
-          <span className="file-count">{images.length} 张</span>
+    <section className="panel result-panel">
+      <div className="panel-header horizontal">
+        <div>
+          <h2 className="panel-title">扫描结果</h2>
+          <p className="panel-description">扫描后将在这里显示图片列表。</p>
         </div>
-        <div className="file-list">
+        <span className="count-badge">{images.length} 张</span>
+      </div>
+
+      {images.length === 0 ? (
+        <div className="empty-state">选择图片目录后开始扫描。</div>
+      ) : (
+        <div className="list-table">
           {images.map((image, index) => (
-            <div key={index} className="file-item">
-              <div className="file-info">
-                <span className="file-icon">🖼️</span>
-                <div className="file-details">
-                  <div className="file-name">{image.name}</div>
-                  <div className="file-path">{image.relativePath}</div>
-                </div>
+            <div className="list-row" key={`${image.path}-${index}`}>
+              <div className="list-main">
+                <strong>{image.name}</strong>
+                <span>{image.relativePath}</span>
               </div>
-              <span className="file-size">{formatFileSize(image.size)}</span>
+              <span className="size-cell">{formatFileSize(image.size)}</span>
             </div>
           ))}
         </div>
-      </div>
-    </div>
+      )}
+    </section>
   );
 };
 

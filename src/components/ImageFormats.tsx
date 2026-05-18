@@ -1,47 +1,47 @@
 import React from 'react';
 import { useCompressionStore } from '../stores/compressionStore';
 
+const formatOptions = [
+  { value: 'png', label: 'PNG' },
+  { value: 'jpg', label: 'JPG' },
+  { value: 'jpeg', label: 'JPEG' },
+  { value: 'webp', label: 'WebP' }
+];
+
 const ImageFormats: React.FC = () => {
   const { config, setConfig } = useCompressionStore();
-  const formatOptions = [
-    { value: 'png', label: 'PNG', icon: '🖼️' },
-    { value: 'jpg', label: 'JPG', icon: '📸' },
-    { value: 'jpeg', label: 'JPEG', icon: '📷' },
-    { value: 'webp', label: 'WebP', icon: '🕸️' }
-  ];
 
   const handleFormatChange = (format: string, checked: boolean) => {
-    if (checked) {
-      setConfig({ imageFormats: [...config.imageFormats, format] });
-    } else {
-      setConfig({ imageFormats: config.imageFormats.filter(f => f !== format) });
-    }
+    const nextFormats = checked
+      ? Array.from(new Set([...config.imageFormats, format]))
+      : config.imageFormats.filter((value) => value !== format);
+
+    setConfig({ imageFormats: nextFormats });
   };
 
   return (
-    <div className="module-section">
-      <div className="module-header">
-        <span className="module-icon">🎯</span>
+    <section className="panel">
+      <div className="panel-header">
         <div>
-          <h3 className="module-title">需要扫描的格式</h3>
-          <p className="module-description">勾选会被扫描并参与压缩/转换的格式</p>
+          <h2 className="panel-title">格式筛选</h2>
+          <p className="panel-description">只扫描勾选格式，减少无关文件进入队列。</p>
         </div>
       </div>
-      
+
       <div className="checkbox-grid">
         {formatOptions.map((format) => (
-          <label key={format.value} className="checkbox-item" htmlFor={`format-${format.value}`}>
+          <label className="check-card" key={format.value} htmlFor={`format-${format.value}`}>
             <input
-              type="checkbox"
               id={`format-${format.value}`}
+              type="checkbox"
               checked={config.imageFormats.includes(format.value)}
-              onChange={(e) => handleFormatChange(format.value, e.target.checked)}
+              onChange={(event) => handleFormatChange(format.value, event.target.checked)}
             />
-            <span>{format.icon} {format.label}</span>
+            <span>{format.label}</span>
           </label>
         ))}
       </div>
-    </div>
+    </section>
   );
 };
 

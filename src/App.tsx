@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { useCompressionStore } from './stores/compressionStore';
 import FolderSettings from './components/FolderSettings';
 import ImageFormats from './components/ImageFormats';
@@ -7,7 +7,6 @@ import ActionButtons from './components/ActionButtons';
 import ImageList from './components/ImageList';
 import CompressionResults from './components/CompressionResults';
 import OperationLogs from './components/OperationLogs';
-import './modular-layout.css';
 
 declare global {
   interface Window {
@@ -27,72 +26,49 @@ const App: React.FC = () => {
     clearResults,
     addLog,
     images,
-    compressionResults
+    compressionResults,
+    isScanning,
+    isProcessing
   } = useCompressionStore();
 
-  const [isScanning, setIsScanning] = useState(false);
-  const [isCompressing, setIsCompressing] = useState(false);
-
   const handleFolderSelect = useCallback(async () => {
-    const mockFolders = [
+    const sampleFolders = [
       'D:\\图片测试',
       'D:\\照片',
       'D:\\下载\\图片',
-      'C:\\用户\\图片',
+      'C:\\Users\\Public\\Pictures',
       'D:\\工作\\图片素材'
     ];
 
     const folder = window.prompt(
-      '请选择文件夹路径（或输入自定义路径）：\n\n' +
-      mockFolders.map((f, i) => `${i + 1}. ${f}`).join('\n') +
-      '\n\n输入数字 (1-5) 或自定义路径',
-      '1'
+      `请输入图片目录路径，或输入序号选择示例目录:\n\n${sampleFolders
+        .map((path, index) => `${index + 1}. ${path}`)
+        .join('\n')}`,
+      selectedFolder || '1'
     );
 
     if (!folder) return;
 
-    const index = parseInt(folder, 10);
+    const index = Number.parseInt(folder, 10);
     const resolvedPath =
-      !Number.isNaN(index) && index >= 1 && index <= mockFolders.length
-        ? mockFolders[index - 1]
+      !Number.isNaN(index) && index >= 1 && index <= sampleFolders.length
+        ? sampleFolders[index - 1]
         : folder;
 
     setSelectedFolder(resolvedPath);
-    addLog(`选择了文件夹: ${resolvedPath}`);
-  }, [setSelectedFolder, addLog]);
+    addLog(`已选择图片目录: ${resolvedPath}`);
+  }, [addLog, selectedFolder, setSelectedFolder]);
 
   const handleScanImages = useCallback(async () => {
-    if (!selectedFolder) return;
-    setIsScanning(true);
-    try {
-      await scanImages();
-    } catch (error) {
-      console.error('扫描图片失败:', error);
-    } finally {
-      setIsScanning(false);
-    }
-  }, [selectedFolder, scanImages]);
+    await scanImages();
+  }, [scanImages]);
 
   const handleCompressImages = useCallback(async () => {
-    setIsCompressing(true);
-    try {
-      await compressImages();
-    } catch (error) {
-      console.error('压缩图片失败:', error);
-    } finally {
-      setIsCompressing(false);
-    }
+    await compressImages();
   }, [compressImages]);
 
   const handleBackupImages = useCallback(async () => {
-    setIsCompressing(true);
-    try {
-      await backupImages();
-    } catch (error) {
-      console.error('备份图片失败:', error);
-    } finally {
-      setIsCompressing(false);
-    }
+    await backupImages();
   }, [backupImages]);
 
   return (
@@ -100,105 +76,60 @@ const App: React.FC = () => {
       <div className="app-shell">
         <header className="app-header">
           <div className="header-copy">
-            <p className="eyebrow">Batch ready · 本地处理</p>
+            <p className="eyebrow">本地批处理</p>
             <h1 className="app-title">图片压缩工具</h1>
             <p className="app-subtitle">
-              支持 PNG/JPG/WebP 转换、批量压缩和一键备份，不占用上传带宽。
+              本地批量压缩、格式转换和备份，适合处理站点素材与照片目录。
             </p>
-            <div className="header-tags">
-              <span className="pill pill-blue">WebP 转换</span>
-              <span className="pill pill-amber">批量压缩</span>
-              <span className="pill pill-green">安全备份</span>
-            </div>
           </div>
 
-          <div className="hero-card">
-            <div className="hero-metric">
-              <span className="metric-label">当前目录</span>
-              <div className="metric-value">{selectedFolder ? '已就绪' : '未选择'}</div>
-              <div className="metric-sub">
-                {selectedFolder || '请选择源文件夹以开始'}
-              </div>
+          <div className="metric-row" aria-label="当前处理状态">
+            <div className="metric-card">
+              <span className="metric-label">目录</span>
+              <strong className="metric-value">{selectedFolder ? '已选择' : '未选择'}</strong>
             </div>
-            <div className="hero-metric">
-              <span className="metric-label">队列</span>
-              <div className="metric-value">{images.length}</div>
-              <div className="metric-sub">待处理图片</div>
+            <div className="metric-card">
+              <span className="metric-label">待处理</span>
+              <strong className="metric-value">{images.length}</strong>
             </div>
-            <div className="hero-metric">
+            <div className="metric-card">
               <span className="metric-label">结果</span>
-              <div className="metric-value">{compressionResults.length}</div>
-              <div className="metric-sub">已生成记录</div>
+              <strong className="metric-value">{compressionResults.length}</strong>
             </div>
           </div>
         </header>
 
-        <div className="status-bar">
-          <div className="status-chip">
-            <span className="chip-label">已选目录</span>
-            <span className="chip-value">{selectedFolder || '未选择'}</span>
-          </div>
-          <div className="status-chip">
-            <span className="chip-label">待压缩</span>
-            <span className="chip-value">{images.length} 张</span>
-          </div>
-          <div className="status-chip">
-            <span className="chip-label">压缩结果</span>
-            <span className="chip-value">{compressionResults.length} 条</span>
-          </div>
-        </div>
-
         <main className="app-main">
-          <section className="settings-panel">
-            <div className="settings-grid">
-              <div className="settings-module">
-                <FolderSettings
-                  selectedFolder={selectedFolder}
-                  onFolderSelect={handleFolderSelect}
-                  onScanImages={handleScanImages}
-                  isScanning={isScanning}
-                />
-              </div>
+          <section className="workspace-grid" aria-label="图片压缩工作区">
+            <div className="left-column">
+              <FolderSettings
+                selectedFolder={selectedFolder}
+                onFolderSelect={handleFolderSelect}
+                onScanImages={handleScanImages}
+                isScanning={isScanning}
+              />
+              <ImageFormats />
+            </div>
 
-              <div className="settings-module">
-                <ImageFormats />
-              </div>
-
-              <div className="settings-module">
-                <OutputSettings />
-              </div>
+            <div className="right-column">
+              <OutputSettings />
+              <ActionButtons
+                onCompressImages={handleCompressImages}
+                onClearResults={clearResults}
+                onBackupImages={handleBackupImages}
+                isCompressing={isProcessing}
+                disabled={!selectedFolder}
+              />
             </div>
           </section>
 
-          <section className="action-panel">
-            <ActionButtons
-              onCompressImages={handleCompressImages}
-              onClearResults={clearResults}
-              onBackupImages={handleBackupImages}
-              isCompressing={isCompressing}
-              disabled={!selectedFolder}
-            />
+          <section className="results-grid" aria-label="处理结果">
+            <ImageList />
+            <CompressionResults />
           </section>
 
-          <section className="content-panel">
-            <div className="content-grid">
-              <div className="content-module">
-                <ImageList />
-              </div>
-              <div className="content-module">
-                <CompressionResults />
-              </div>
-            </div>
-          </section>
-
-          <section className="logs-panel">
-            <OperationLogs />
-          </section>
+          <OperationLogs />
         </main>
-
-        <footer className="app-footer">
-          <p className="footer-text">批量压缩、格式转换与备份 | 运行于本地，无需上传</p>
-        </footer>
       </div>
     </div>
   );

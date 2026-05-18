@@ -1,38 +1,41 @@
 import React from 'react';
 import { useCompressionStore } from '../stores/compressionStore';
 
+const formatOptions = [
+  { value: 'original', label: '保留原始格式' },
+  { value: 'png', label: 'PNG' },
+  { value: 'jpg', label: 'JPG' },
+  { value: 'jpeg', label: 'JPEG' },
+  { value: 'webp', label: 'WebP' }
+];
+
 const OutputSettings: React.FC = () => {
   const { config, setConfig } = useCompressionStore();
-  const formatOptions = [
-    { value: 'original', label: '保持原格式' },
-    { value: 'png', label: 'PNG' },
-    { value: 'jpg', label: 'JPG' },
-    { value: 'jpeg', label: 'JPEG' },
-    { value: 'webp', label: 'WebP' }
-  ];
 
   const handleNumberChange = (value: string, key: 'width' | 'height') => {
-    const parsed = value ? parseInt(value, 10) : undefined;
-    setConfig({ [key]: parsed } as Partial<typeof config>);
+    const parsed = value ? Number.parseInt(value, 10) : undefined;
+    setConfig({ [key]: Number.isNaN(parsed) ? undefined : parsed });
   };
 
   return (
-    <div className="module-section">
-      <div className="module-header">
-        <span className="module-icon">⚙️</span>
+    <section className="panel">
+      <div className="panel-header">
         <div>
-          <h3 className="module-title">输出与压缩</h3>
-          <p className="module-description">控制输出格式、尺寸、质量与落地目录</p>
+          <h2 className="panel-title">输出设置</h2>
+          <p className="panel-description">控制格式、尺寸、质量和输出位置。</p>
         </div>
       </div>
-      
-      <div className="grid-4">
-        <div className="control-group">
-          <label className="control-label">输出格式</label>
+
+      <div className="form-grid">
+        <div className="field-group">
+          <label className="field-label" htmlFor="output-format">
+            输出格式
+          </label>
           <select
-            value={config.outputFormat}
-            onChange={(e) => setConfig({ outputFormat: e.target.value })}
+            id="output-format"
             className="select-control"
+            value={config.outputFormat}
+            onChange={(event) => setConfig({ outputFormat: event.target.value })}
           >
             {formatOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -41,83 +44,92 @@ const OutputSettings: React.FC = () => {
             ))}
           </select>
         </div>
-        
-        <div className="control-group">
-          <label className="control-label">宽度 (px)</label>
+
+        <div className="field-group">
+          <label className="field-label" htmlFor="width">
+            宽度 (px)
+          </label>
           <input
+            id="width"
+            className="number-control"
             type="number"
+            min={1}
             value={config.width || ''}
-            onChange={(e) => handleNumberChange(e.target.value, 'width')}
+            onChange={(event) => handleNumberChange(event.target.value, 'width')}
             placeholder="留空保持原尺寸"
-            className="number-control"
           />
         </div>
-        
-        <div className="control-group">
-          <label className="control-label">高度 (px)</label>
+
+        <div className="field-group">
+          <label className="field-label" htmlFor="height">
+            高度 (px)
+          </label>
           <input
+            id="height"
+            className="number-control"
             type="number"
+            min={1}
             value={config.height || ''}
-            onChange={(e) => handleNumberChange(e.target.value, 'height')}
+            onChange={(event) => handleNumberChange(event.target.value, 'height')}
             placeholder="留空保持原尺寸"
-            className="number-control"
-          />
-        </div>
-        
-        <div className="control-group">
-          <label className="control-label">尺寸策略</label>
-          <label className="checkbox-item inline-checkbox" htmlFor="aspect-ratio">
-            <input
-              type="checkbox"
-              id="aspect-ratio"
-              checked={config.maintainAspectRatio}
-              onChange={(e) => setConfig({ maintainAspectRatio: e.target.checked })}
-            />
-            <span>保持宽高比</span>
-          </label>
-        </div>
-
-        <div className="control-group">
-          <label className="control-label">覆盖原目录</label>
-          <label className="checkbox-item inline-checkbox" htmlFor="overwrite-original">
-            <input
-              type="checkbox"
-              id="overwrite-original"
-              checked={!!config.overwriteOriginal}
-              onChange={(e) => setConfig({ overwriteOriginal: e.target.checked })}
-            />
-            <span>直接写入源目录（可能覆盖原文件）</span>
-          </label>
-        </div>
-
-        <div className="control-group">
-          <label className="control-label">输出目录（可选）</label>
-          <input
-            type="text"
-            value={config.outputFolder || ''}
-            onChange={(e) => setConfig({ outputFolder: e.target.value })}
-            placeholder="不填则写入源目录下 __compressed"
-            className="control-input"
           />
         </div>
 
-        <div className="control-group quality-group">
-          <label className="control-label">压缩质量</label>
-          <div className="slider-row">
+        <div className="field-group">
+          <label className="field-label" htmlFor="quality">
+            压缩质量
+          </label>
+          <div className="range-row">
             <input
+              id="quality"
+              className="range-control"
               type="range"
               min={40}
               max={100}
               value={config.quality}
-              onChange={(e) => setConfig({ quality: parseInt(e.target.value, 10) })}
-              className="range-control"
+              onChange={(event) => setConfig({ quality: Number.parseInt(event.target.value, 10) })}
             />
-            <span className="pill pill-blue">{config.quality}%</span>
+            <span className="value-pill">{config.quality}%</span>
           </div>
-          <p className="field-hint">数值越高画质越好，文件越大</p>
         </div>
       </div>
-    </div>
+
+      <div className="option-row">
+        <label className="switch-row" htmlFor="aspect-ratio">
+          <input
+            id="aspect-ratio"
+            type="checkbox"
+            checked={config.maintainAspectRatio}
+            onChange={(event) => setConfig({ maintainAspectRatio: event.target.checked })}
+          />
+          <span>保持宽高比</span>
+        </label>
+
+        <label className="switch-row" htmlFor="overwrite-original">
+          <input
+            id="overwrite-original"
+            type="checkbox"
+            checked={!!config.overwriteOriginal}
+            onChange={(event) => setConfig({ overwriteOriginal: event.target.checked })}
+          />
+          <span>直接写入源目录</span>
+        </label>
+      </div>
+
+      <div className="field-group">
+        <label className="field-label" htmlFor="output-folder">
+          输出目录
+        </label>
+        <input
+          id="output-folder"
+          className="control-input"
+          type="text"
+          value={config.outputFolder || ''}
+          onChange={(event) => setConfig({ outputFolder: event.target.value })}
+          placeholder="留空则写入源目录下的 __compressed"
+        />
+      </div>
+    </section>
   );
 };
 
