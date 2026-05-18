@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 .svn
+.worktrees/
 
 # Editor directories and files
 .vscode/*
