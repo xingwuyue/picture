@@ -30,6 +30,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs: number) => {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } finally {
@@ -41,19 +42,21 @@ let cachedApiBaseUrl: string | null = null;
 
 const requestApiJson = async (path: string, init: RequestInit) => {
   const candidates = cachedApiBaseUrl
-    ? [cachedApiBaseUrl, ...getApiBaseCandidates().filter((v) => v !== cachedApiBaseUrl)]
+    ? [cachedApiBaseUrl, ...getApiBaseCandidates().filter((value) => value !== cachedApiBaseUrl)]
     : getApiBaseCandidates();
 
   let lastError: unknown = null;
 
   for (const baseUrl of candidates) {
     const url = `${normalizeBaseUrl(baseUrl)}${path}`;
+
     try {
       const response = await fetchWithTimeout(url, init, 30000);
       const contentType = response.headers.get('content-type') || '';
+
       if (!contentType.includes('application/json')) {
         const text = await response.text();
-        throw new Error(`服务器返回了非JSON响应: ${text.substring(0, 200)}`);
+        throw new Error(`服务端返回了非 JSON 响应: ${text.substring(0, 200)}`);
       }
 
       const json = (await response.json()) as unknown;
@@ -65,7 +68,8 @@ const requestApiJson = async (path: string, init: RequestInit) => {
       const message = error instanceof Error ? error.message : String(error);
       const isNetworkError = error instanceof TypeError && message.includes('fetch');
       const isAborted = error instanceof DOMException && error.name === 'AbortError';
-      const isNonJson = error instanceof Error && message.startsWith('服务器返回了非JSON响应:');
+      const isNonJson =
+        error instanceof Error && message.startsWith('服务端返回了非 JSON 响应:');
 
       if (isNetworkError || isAborted || isNonJson) {
         continue;
@@ -150,13 +154,15 @@ export const useCompressionStore = create<CompressionState>()(
 
       setSelectedFolder: (folder) => set({ selectedFolder: folder }),
 
-      setConfig: (newConfig) => set((state) => ({
-        config: { ...state.config, ...newConfig }
-      })),
+      setConfig: (newConfig) =>
+        set((state) => ({
+          config: { ...state.config, ...newConfig }
+        })),
 
-      addLog: (log) => set((state) => ({
-        logs: [...state.logs, `[${new Date().toLocaleTimeString()}] ${log}`]
-      })),
+      addLog: (log) =>
+        set((state) => ({
+          logs: [...state.logs, `[${new Date().toLocaleTimeString()}] ${log}`]
+        })),
 
       clearLogs: () => set({ logs: [] }),
 
@@ -197,32 +203,29 @@ export const useCompressionStore = create<CompressionState>()(
           });
 
           if (!isRecord(json)) {
-            addLog(`备份失败: 服务器返回了非预期数据 (${baseUrl})`);
+            addLog(`备份失败: 服务端返回了非预期数据 (${baseUrl})`);
             return;
           }
 
-          const success = json.success;
           const copiedFiles = typeof json.copiedFiles === 'number' ? json.copiedFiles : undefined;
           const totalFiles = typeof json.totalFiles === 'number' ? json.totalFiles : undefined;
+          const message = typeof json.message === 'string' ? json.message : undefined;
+          const error = typeof json.error === 'string' ? json.error : undefined;
 
-          if (success === true) {
+          if (json.success === true) {
             if (typeof copiedFiles === 'number' && typeof totalFiles === 'number') {
-              addLog(`备份完成！成功复制 ${copiedFiles}/${totalFiles} 个文件`);
-            } else if (typeof json.message === 'string') {
-              addLog(`备份完成！${json.message}`);
+              addLog(`备份完成，成功复制 ${copiedFiles}/${totalFiles} 个文件`);
             } else {
-              addLog('备份完成！');
+              addLog(`备份完成${message ? `: ${message}` : ''}`);
             }
           } else {
-            const error = typeof json.error === 'string' ? json.error : undefined;
-            const message = typeof json.message === 'string' ? json.message : undefined;
             addLog(`备份失败: ${error || message || '未知错误'}`);
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           if (error instanceof TypeError && message.includes('fetch')) {
             const candidates = getApiBaseCandidates().join(' / ');
-            addLog(`备份错误: 无法连接到本地服务 (${candidates})，请确认已启动后端服务`);
+            addLog(`备份错误: 无法连接本地服务 (${candidates})，请确认后端服务已启动`);
           } else {
             addLog(`备份错误: ${message}`);
           }
@@ -233,7 +236,7 @@ export const useCompressionStore = create<CompressionState>()(
 
       scanImages: async () => {
         const { selectedFolder, config, addLog, setImages, setIsScanning } = get();
-        
+
         if (!selectedFolder) {
           addLog('请先选择文件夹');
           return;
@@ -253,11 +256,12 @@ export const useCompressionStore = create<CompressionState>()(
           });
 
           if (!isRecord(json)) {
-            addLog(`扫描失败: 服务器返回了非预期数据 (${baseUrl})`);
+            addLog(`扫描失败: 服务端返回了非预期数据 (${baseUrl})`);
             return;
           }
 
           const images = json.images;
+
           if (Array.isArray(images)) {
             setImages(images as ImageFile[]);
             addLog(`扫描完成，找到 ${images.length} 张图片`);
@@ -272,7 +276,7 @@ export const useCompressionStore = create<CompressionState>()(
           const message = error instanceof Error ? error.message : String(error);
           if (error instanceof TypeError && message.includes('fetch')) {
             const candidates = getApiBaseCandidates().join(' / ');
-            addLog(`扫描错误: 无法连接到本地服务 (${candidates})，请确认已启动后端服务`);
+            addLog(`扫描错误: 无法连接本地服务 (${candidates})，请确认后端服务已启动`);
           } else {
             addLog(`扫描错误: ${message}`);
           }
@@ -282,16 +286,10 @@ export const useCompressionStore = create<CompressionState>()(
       },
 
       compressImages: async () => {
-        const { 
-          images, 
-          config, 
-          addLog, 
-          setCompressionResults, 
-          setIsProcessing 
-        } = get();
+        const { images, config, addLog, setCompressionResults, setIsProcessing } = get();
 
         if (images.length === 0) {
-          addLog('没有可压缩的图片');
+          addLog('没有可压缩的图片，请先扫描目录');
           return;
         }
 
@@ -315,7 +313,7 @@ export const useCompressionStore = create<CompressionState>()(
           });
 
           if (!isRecord(json)) {
-            addLog(`压缩失败: 服务器返回了非预期数据 (${baseUrl})`);
+            addLog(`压缩失败: 服务端返回了非预期数据 (${baseUrl})`);
             setCompressionResults([]);
             return;
           }
@@ -323,25 +321,26 @@ export const useCompressionStore = create<CompressionState>()(
           const rawResults = Array.isArray(json.results) ? json.results : null;
 
           if (rawResults) {
-            const results: CompressionResult[] = rawResults.map((r: any) => ({
-              name: r.name,
-              path: r.path || r.outputPath || r.relativePath,
-              originalSize: images.find(img => img.name === r.name)?.size || r.originalSize || 0,
-              compressedSize: r.compressedSize || 0,
-              compressionRatio: r.compressionRatio || '0',
-              success: r.success !== false,
-              error: r.error
+            const results: CompressionResult[] = rawResults.map((result: any) => ({
+              name: result.name,
+              path: result.path || result.outputPath || result.relativePath,
+              originalSize:
+                images.find((image) => image.name === result.name)?.size || result.originalSize || 0,
+              compressedSize: result.compressedSize || 0,
+              compressionRatio: result.compressionRatio || '0',
+              success: result.success !== false,
+              error: result.error
             }));
-            
+
             setCompressionResults(results);
-            const successful = results.filter(r => r.success).length;
-            addLog(`压缩完成！成功 ${successful}/${images.length} 个`);
-            
-            results.forEach(result => {
+            const successful = results.filter((result) => result.success).length;
+            addLog(`压缩完成，成功 ${successful}/${images.length} 个`);
+
+            results.forEach((result) => {
               if (result.success) {
-                addLog(`✔ ${result.name} - 节省 ${result.compressionRatio}%`);
+                addLog(`成功: ${result.name} - 节省 ${result.compressionRatio}%`);
               } else {
-                addLog(`✖ ${result.name} - 失败: ${result.error || '未知错误'}`);
+                addLog(`失败: ${result.name} - ${result.error || '未知错误'}`);
               }
             });
           } else {
@@ -354,7 +353,7 @@ export const useCompressionStore = create<CompressionState>()(
           const message = error instanceof Error ? error.message : String(error);
           if (error instanceof TypeError && message.includes('fetch')) {
             const candidates = getApiBaseCandidates().join(' / ');
-            addLog(`压缩错误: 无法连接到本地服务 (${candidates})，请确认已启动后端服务`);
+            addLog(`压缩错误: 无法连接本地服务 (${candidates})，请确认后端服务已启动`);
           } else {
             addLog(`压缩错误: ${message}`);
           }
@@ -366,7 +365,7 @@ export const useCompressionStore = create<CompressionState>()(
     }),
     {
       name: 'compression-store',
-      partialize: (state) => ({ 
+      partialize: (state) => ({
         config: state.config,
         selectedFolder: state.selectedFolder
       })
